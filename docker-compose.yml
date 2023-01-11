@@ -1,0 +1,82 @@
+version: "3.7"
+services:
+  nginx_question:
+    image: nginx:1.16-alpine
+    container_name: nginx_question
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./api:/var/www/api
+      - ./client:/var/www/client
+      - ./docker/nginx:/etc/nginx/conf.d/
+      - ./docker/certs:/etc/nginx/certs
+    networks:
+      - question_network
+    depends_on:
+      - api_question
+      - client_question
+
+  db_question:
+    image: mysql:5.7.22
+    container_name: db_question
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: question_app_db
+      MYSQL_ROOT_PASSWORD: question_app_password
+      MYSQL_PASSWORD: question_app_password
+      MYSQL_USER: question_app_user
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ./db_data:/var/lib/mysql
+      - ./docker/mysql:/etc/mysql/conf.d
+    networks:
+      - question_network
+
+  api_question:
+    build:
+      args:
+        user: vlad
+        uid: 1000
+      context: ./docker
+      dockerfile: Back.Dockerfile
+    tty: true
+    container_name: api_question
+    restart: unless-stopped
+    working_dir: /var/www/api
+    volumes:
+      - ./api:/var/www/api
+    networks:
+      - question_network
+    links:
+      - db_question
+
+  client_question:
+    image: node:16-alpine
+    container_name: client_question
+    tty: true
+    volumes:
+      - ./client:/client
+    working_dir: /client
+    environment:
+      NODE_ENV: development
+      NUXT_HOST: "0.0.0.0"
+    command: npm run dev
+    networks:
+      - question_network
+    links:
+      - api_question
+    ports:
+      - "3000:3000"
+
+volumes:
+  db_data:
+
+networks:
+  question_network:
+    driver: bridge
